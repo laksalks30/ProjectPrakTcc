@@ -1,0 +1,13 @@
+# ============ FILE: medication-service/requirements.txt ============
+fastapi
+uvicorn[standard]
+sqlalchemy
+pymysql
+cryptography
+python-dotenv
+python-multipart
+pydantic
+pydantic-settings
+PyJWT
+google-cloud-storage
+uuid

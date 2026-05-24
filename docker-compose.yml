@@ -1,0 +1,110 @@
+# ============ FILE: docker-compose.yml ============
+# Local development environment for all services
+version: '3.8'
+
+services:
+  # ─── MySQL Database ───────────────────────────────────────────
+  mysql:
+    image: mysql:8.0
+    container_name: obatlansia-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/auth_db.sql:/docker-entrypoint-initdb.d/01_auth_db.sql
+      - ./database/medication_db.sql:/docker-entrypoint-initdb.d/02_medication_db.sql
+    networks:
+      - obatlansia-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ─── Auth Service ─────────────────────────────────────────────
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: obatlansia-auth
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      PORT: 8001
+      NODE_ENV: development
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: auth_db
+      JWT_SECRET: dev_jwt_secret_change_in_production_min_32_chars
+      JWT_EXPIRES_IN: 24h
+      GCS_BUCKET_NAME: obat-lansia-bucket
+      GCP_PROJECT_ID: local-dev
+      CORS_ORIGIN: http://localhost:5173
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - obatlansia-network
+    volumes:
+      - ./auth-service/src:/app/src
+
+  # ─── Medication Service ───────────────────────────────────────
+  medication-service:
+    build:
+      context: ./medication-service
+      dockerfile: Dockerfile
+    container_name: obatlansia-medication
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      PORT: 8002
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: medication_db
+      JWT_SECRET: dev_jwt_secret_change_in_production_min_32_chars
+      GCS_BUCKET_NAME: obat-lansia-bucket
+      GCP_PROJECT_ID: local-dev
+      CORS_ORIGIN: http://localhost:5173
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - obatlansia-network
+
+  # ─── Frontend ─────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_AUTH_SERVICE_URL: http://localhost:8001/api/auth
+        VITE_MEDICATION_SERVICE_URL: http://localhost:8002/api
+    container_name: obatlansia-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - auth-service
+      - medication-service
+    networks:
+      - obatlansia-network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  obatlansia-network:
+    driver: bridge

@@ -1,0 +1,146 @@
+# ============ FILE: cloudbuild.yaml ============
+# CI/CD Pipeline for all ObatLansia microservices
+# Triggers on push to main branch
+
+substitutions:
+  _REGION: asia-southeast2
+  _AUTH_SERVICE_NAME: obatlansia-auth-service
+  _MED_SERVICE_NAME: obatlansia-medication-service
+  _FRONTEND_APP: obatlansia-frontend
+  _GCS_BUCKET: obat-lansia-bucket
+
+steps:
+  # ─────────────────────────────────────────────────────────────
+  # STEP 1: Build Auth Service Docker Image
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-auth-service'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_AUTH_SERVICE_NAME}:$SHORT_SHA'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_AUTH_SERVICE_NAME}:latest'
+      - './auth-service'
+
+  # ─────────────────────────────────────────────────────────────
+  # STEP 2: Build Medication Service Docker Image
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-medication-service'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_MED_SERVICE_NAME}:$SHORT_SHA'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_MED_SERVICE_NAME}:latest'
+      - './medication-service'
+
+  # ─────────────────────────────────────────────────────────────
+  # STEP 3: Build Frontend Docker Image
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-frontend'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_FRONTEND_APP}:$SHORT_SHA'
+      - '--build-arg'
+      - 'VITE_AUTH_SERVICE_URL=https://${_AUTH_SERVICE_NAME}-xxxxxxxxxx-${_REGION}.a.run.app/api/auth'
+      - '--build-arg'
+      - 'VITE_MEDICATION_SERVICE_URL=https://${_MED_SERVICE_NAME}-xxxxxxxxxx-${_REGION}.a.run.app/api'
+      - './frontend'
+
+  # ─────────────────────────────────────────────────────────────
+  # STEP 4: Push Auth Service Image
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-auth-service'
+    waitFor: ['build-auth-service']
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_AUTH_SERVICE_NAME}'
+
+  # ─────────────────────────────────────────────────────────────
+  # STEP 5: Push Medication Service Image
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'push-medication-service'
+    waitFor: ['build-medication-service']
+    args:
+      - 'push'
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_MED_SERVICE_NAME}'
+
+  # ─────────────────────────────────────────────────────────────
+  # STEP 6: Deploy Auth Service to Cloud Run
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-auth-service'
+    waitFor: ['push-auth-service']
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_AUTH_SERVICE_NAME}'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_AUTH_SERVICE_NAME}:$SHORT_SHA'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=8001'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--min-instances=0'
+      - '--max-instances=10'
+      - '--set-env-vars=NODE_ENV=production'
+      - '--set-env-vars=PORT=8001'
+      - '--set-secrets=DB_HOST=DB_HOST:latest,DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest'
+
+  # ─────────────────────────────────────────────────────────────
+  # STEP 7: Deploy Medication Service to Cloud Run
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-medication-service'
+    waitFor: ['push-medication-service']
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_MED_SERVICE_NAME}'
+      - '--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_MED_SERVICE_NAME}:$SHORT_SHA'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=8002'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--min-instances=0'
+      - '--max-instances=10'
+      - '--set-env-vars=PORT=8002'
+      - '--set-secrets=DB_HOST=DB_HOST:latest,DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest'
+
+  # ─────────────────────────────────────────────────────────────
+  # STEP 8: Deploy Frontend to App Engine
+  # ─────────────────────────────────────────────────────────────
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'build-and-deploy-frontend'
+    waitFor: ['deploy-auth-service', 'deploy-medication-service']
+    entrypoint: bash
+    dir: './frontend'
+    args:
+      - '-c'
+      - |
+        npm ci &&
+        npm run build &&
+        gcloud app deploy app.yaml --quiet --project=$PROJECT_ID
+
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_AUTH_SERVICE_NAME}:$SHORT_SHA'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_MED_SERVICE_NAME}:$SHORT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_MEDIUM
+
+timeout: '1800s'
