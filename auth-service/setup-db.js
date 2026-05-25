@@ -1,3 +1,4 @@
+require('dotenv').config();
 const mysql = require('mysql2/promise');
 const fs = require('fs');
 const path = require('path');
@@ -5,10 +6,10 @@ const path = require('path');
 async function setupDatabase() {
   try {
     const connection = await mysql.createConnection({
-      host: 'localhost',
-      port: 3306,
-      user: 'root',
-      password: '',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT, 10) || 3310,
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
       multipleStatements: true
     });
 

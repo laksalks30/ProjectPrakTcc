@@ -1,4 +1,12 @@
 // ============ FILE: mobile_app/lib/models/prescription.dart ============
+
+int _toInt(dynamic v, [int fallback = 0]) {
+  if (v == null) return fallback;
+  if (v is int) return v;
+  if (v is String) return int.tryParse(v) ?? fallback;
+  return fallback;
+}
+
 class Prescription {
   final int id;
   final int patientId;
@@ -30,9 +38,9 @@ class Prescription {
 
   factory Prescription.fromJson(Map<String, dynamic> json) {
     return Prescription(
-      id: json['id'] ?? 0,
-      patientId: json['patient_id'] ?? 0,
-      medicationId: json['medication_id'] ?? 0,
+      id: _toInt(json['id']),
+      patientId: _toInt(json['patient_id']),
+      medicationId: _toInt(json['medication_id']),
       dosage: json['dosage'] ?? '',
       frequency: json['frequency'] ?? '',
       startDate: json['start_date'] ?? '',

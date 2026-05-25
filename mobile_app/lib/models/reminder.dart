@@ -1,4 +1,11 @@
 // ============ FILE: mobile_app/lib/models/reminder.dart ============
+
+int _toInt(dynamic v, [int fallback = 0]) {
+  if (v == null) return fallback;
+  if (v is int) return v;
+  if (v is String) return int.tryParse(v) ?? fallback;
+  return fallback;
+}
 class Reminder {
   final int id;
   final int prescriptionId;
@@ -33,9 +40,9 @@ class Reminder {
     }
 
     return Reminder(
-      id: json['id'] ?? 0,
-      prescriptionId: json['prescription_id'] ?? 0,
-      patientId: json['patient_id'] ?? 0,
+      id: _toInt(json['id']),
+      prescriptionId: _toInt(json['prescription_id']),
+      patientId: _toInt(json['patient_id']),
       scheduledTime: json['scheduled_time'] ?? '08:00',
       daysOfWeek: days,
       isActive: json['is_active'] ?? true,

@@ -354,15 +354,15 @@ class _RemindersScreenState extends State<RemindersScreen> {
                       decoration: const InputDecoration(
                         contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       ),
-                      hint: const Text('-- Pilih Resep --'),
-                      items: _prescriptions.map((rx) {
+                      hint: Text(_prescriptions.isEmpty ? 'Belum ada resep aktif' : '-- Pilih Resep --'),
+                      items: _prescriptions.isEmpty ? null : _prescriptions.map((rx) {
                         final label = '${rx.medicationName ?? "Obat"} — ${rx.dosage} (${rx.frequency})';
                         return DropdownMenuItem(
                           value: rx.id,
                           child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
                         );
                       }).toList(),
-                      selectedItemBuilder: (context) {
+                      selectedItemBuilder: _prescriptions.isEmpty ? null : (context) {
                         return _prescriptions.map((rx) {
                           final label = '${rx.medicationName ?? "Obat"} — ${rx.dosage} (${rx.frequency})';
                           return Align(
@@ -371,7 +371,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
                           );
                         }).toList();
                       },
-                      onChanged: (id) {
+                      onChanged: _prescriptions.isEmpty ? null : (id) {
                         if (id != null) {
                           final rx = _prescriptions.firstWhere((r) => r.id == id);
                           final count = rx.frequencyCount;
@@ -394,6 +394,14 @@ class _RemindersScreenState extends State<RemindersScreen> {
                         }
                       },
                     ),
+                    if (_prescriptions.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Silakan tambahkan resep obat untuk pasien ini melalui Web Admin terlebih dahulu.',
+                          style: TextStyle(color: AppTheme.error, fontSize: 12),
+                        ),
+                      ),
                     const SizedBox(height: 14),
 
                     // Time pickers

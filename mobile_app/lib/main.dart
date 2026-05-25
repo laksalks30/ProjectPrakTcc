@@ -1,6 +1,7 @@
 // ============ FILE: mobile_app/lib/main.dart ============
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 
@@ -19,15 +20,19 @@ import 'screens/profile_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inisialisasi Firebase
+  // Inisialisasi Firebase (Hanya untuk Mobile)
   try {
-    await Firebase.initializeApp();
+    if (!kIsWeb) {
+      await Firebase.initializeApp();
+    }
   } catch (e) {
     debugPrint('Firebase init error (will work without it): $e');
   }
 
-  // Inisialisasi Notifikasi
-  await NotificationService.initialize();
+  // Inisialisasi Notifikasi (Hanya untuk Mobile)
+  if (!kIsWeb) {
+    await NotificationService.initialize();
+  }
 
   // Status bar style
   SystemChrome.setSystemUIOverlayStyle(

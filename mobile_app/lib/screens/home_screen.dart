@@ -254,42 +254,48 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               )
             else
-              ...(_patients.take(5).map((p) => Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
+              ...(_patients.take(5).map((p) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => _navigateToTab(1),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppTheme.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            gradient: AppTheme.gradientMedical,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Text(
-                              p.initials,
-                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppTheme.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                gradient: AppTheme.gradientMedical,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  p.initials,
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                  Text(p.genderLabel, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 20),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                              Text(p.genderLabel, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 20),
-                      ],
+                      ),
                     ),
                   ))),
           ],

@@ -1,4 +1,12 @@
 // ============ FILE: mobile_app/lib/models/user.dart ============
+
+int _toInt(dynamic v, [int fallback = 0]) {
+  if (v == null) return fallback;
+  if (v is int) return v;
+  if (v is String) return int.tryParse(v) ?? fallback;
+  return fallback;
+}
+
 class User {
   final int id;
   final String name;
@@ -20,7 +28,7 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'] ?? 0,
+      id: _toInt(json['id']),
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       role: json['role'] ?? 'user',

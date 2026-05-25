@@ -63,7 +63,7 @@ const RemindersPage = () => {
 
   const validate = () => {
     const errs = {}
-    if (!form.patient_id) errs.patient_id = 'Pilih pasien'
+    if (!selectedPatient) errs.patient_id = 'Pilih pasien'
     if (!form.prescription_id) errs.prescription_id = 'Pilih resep'
     if (form.scheduled_times.some(t => !t)) errs.scheduled_times = 'Semua waktu wajib diisi'
     if (form.days_of_week.length === 0) errs.days_of_week = 'Pilih minimal 1 hari'
@@ -81,7 +81,7 @@ const RemindersPage = () => {
         return reminderService.create({ 
           ...form, 
           scheduled_time: time,
-          patient_id: parseInt(form.patient_id), 
+          patient_id: parseInt(selectedPatient), 
           prescription_id: parseInt(form.prescription_id) 
         })
       })
@@ -142,44 +142,33 @@ const RemindersPage = () => {
         <div className="card animate-slide-up">
           <div className="card-header"><h3 className="font-semibold text-slate-700">Form Tambah Reminder</h3></div>
           <form onSubmit={handleSubmit} className="card-body space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="form-label">Pasien <span className="text-red-500">*</span></label>
-                <select className={`form-select ${errors.patient_id ? 'form-input-error' : ''}`}
-                  value={form.patient_id} onChange={e => setForm(p => ({ ...p, patient_id: e.target.value }))}>
-                  <option value="">-- Pilih Pasien --</option>
-                  {patients.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </select>
-                {errors.patient_id && <p className="form-error">{errors.patient_id}</p>}
-              </div>
-              <div>
-                <label className="form-label">Resep Aktif <span className="text-red-500">*</span></label>
-                <select className={`form-select ${errors.prescription_id ? 'form-input-error' : ''}`}
-                  value={form.prescription_id} 
-                  onChange={e => {
-                    const pid = e.target.value
-                    const rx = prescriptions.find(r => r.id.toString() === pid)
-                    let times = ['08:00']
-                    if (rx && rx.frequency) {
-                      const match = rx.frequency.match(/(\d+)x/)
-                      if (match) {
-                        const count = parseInt(match[1])
-                        if (count === 1) times = ['08:00']
-                        else if (count === 2) times = ['08:00', '20:00']
-                        else if (count === 3) times = ['08:00', '13:00', '18:00']
-                        else if (count === 4) times = ['06:00', '12:00', '18:00', '23:59']
-                        else times = Array(count).fill('08:00')
-                      }
+            <div>
+              <label className="form-label">Resep Aktif <span className="text-red-500">*</span></label>
+              <select className={`form-select ${errors.prescription_id ? 'form-input-error' : ''}`}
+                value={form.prescription_id} 
+                onChange={e => {
+                  const pid = e.target.value
+                  const rx = prescriptions.find(r => r.id.toString() === pid)
+                  let times = ['08:00']
+                  if (rx && rx.frequency) {
+                    const match = rx.frequency.match(/(\d+)x/)
+                    if (match) {
+                      const count = parseInt(match[1])
+                      if (count === 1) times = ['08:00']
+                      else if (count === 2) times = ['08:00', '20:00']
+                      else if (count === 3) times = ['08:00', '13:00', '18:00']
+                      else if (count === 4) times = ['06:00', '12:00', '18:00', '23:59']
+                      else times = Array(count).fill('08:00')
                     }
-                    setForm(p => ({ ...p, prescription_id: pid, scheduled_times: times }))
-                  }}>
-                  <option value="">-- Pilih Resep --</option>
-                  {prescriptions.map(rx => (
-                    <option key={rx.id} value={rx.id}>{rx.medication_name} — {rx.dosage} ({rx.frequency})</option>
-                  ))}
-                </select>
-                {errors.prescription_id && <p className="form-error">{errors.prescription_id}</p>}
-              </div>
+                  }
+                  setForm(p => ({ ...p, prescription_id: pid, scheduled_times: times }))
+                }}>
+                <option value="">-- Pilih Resep --</option>
+                {prescriptions.map(rx => (
+                  <option key={rx.id} value={rx.id}>{rx.medication_name} — {rx.dosage} ({rx.frequency})</option>
+                ))}
+              </select>
+              {errors.prescription_id && <p className="form-error">{errors.prescription_id}</p>}
             </div>
 
             <div>

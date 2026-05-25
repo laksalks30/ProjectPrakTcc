@@ -1,4 +1,20 @@
 // ============ FILE: mobile_app/lib/models/patient.dart ============
+
+/// Helper: API bisa mengembalikan id sebagai String atau int
+int _toInt(dynamic v, [int fallback = 0]) {
+  if (v == null) return fallback;
+  if (v is int) return v;
+  if (v is String) return int.tryParse(v) ?? fallback;
+  return fallback;
+}
+
+int? _toIntNullable(dynamic v) {
+  if (v == null) return null;
+  if (v is int) return v;
+  if (v is String) return int.tryParse(v);
+  return null;
+}
+
 class Patient {
   final int id;
   final int? userId;
@@ -28,8 +44,8 @@ class Patient {
 
   factory Patient.fromJson(Map<String, dynamic> json) {
     return Patient(
-      id: json['id'] ?? 0,
-      userId: json['user_id'],
+      id: _toInt(json['id']),
+      userId: _toIntNullable(json['user_id']),
       name: json['name'] ?? '',
       birthDate: json['birth_date'],
       gender: json['gender'] ?? 'male',
@@ -37,7 +53,7 @@ class Patient {
       bloodType: json['blood_type'],
       photoUrl: json['photo_url'],
       medicalNotes: json['medical_notes'],
-      caregiverId: json['caregiver_id'],
+      caregiverId: _toIntNullable(json['caregiver_id']),
       createdAt: json['created_at'],
     );
   }

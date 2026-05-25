@@ -1,7 +1,7 @@
 // ============ FILE: frontend/src/components/StatsCard.jsx ============
 import React from 'react'
 
-const StatsCard = ({ title, value, subtitle, icon: Icon, color = 'primary', trend }) => {
+const StatsCard = ({ title, value, subtitle, icon: Icon, color = 'primary', trend, onClick }) => {
   const colorMap = {
     primary: {
       bg: 'bg-primary-50',
@@ -37,7 +37,10 @@ const StatsCard = ({ title, value, subtitle, icon: Icon, color = 'primary', tren
   const c = colorMap[color] || colorMap.primary
 
   return (
-    <div className="card p-5 flex items-center gap-4 hover:shadow-card-hover transition-shadow duration-200">
+    <div 
+      className={`card p-5 flex items-center gap-4 hover:shadow-card-hover transition-shadow duration-200 ${onClick ? 'cursor-pointer hover:bg-slate-50' : ''}`}
+      onClick={onClick}
+    >
       <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${c.icon}`}>
         {Icon && <Icon size={22} />}
       </div>

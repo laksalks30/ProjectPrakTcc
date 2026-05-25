@@ -63,6 +63,7 @@ const DashboardPage = () => {
           subtitle="Pasien terdaftar"
           icon={Users}
           color="primary"
+          onClick={() => navigate('/patients')}
         />
         <StatsCard
           title="Resep Aktif"
