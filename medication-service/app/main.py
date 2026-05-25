@@ -30,9 +30,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 cors_origins = os.getenv("CORS_ORIGIN", "http://localhost:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origin_regex=".*",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
