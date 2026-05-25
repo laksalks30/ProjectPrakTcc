@@ -1,0 +1,13 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local artifacts
+frontend/query
+
+# OS files
+.DS_Store
