@@ -1,8 +1,9 @@
-// ============ FILE: frontend/src/pages/RemindersPage.jsx ============
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import { patientService, reminderService, prescriptionService } from '../services/api'
+import notificationService from '../services/notificationService'
 import ReminderItem from '../components/ReminderItem'
-import { Bell, Plus, X } from 'lucide-react'
+import AlarmModal from '../components/AlarmModal'
+import { Bell, Plus, X, BellRing, BellOff } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuth } from '../context/AuthContext'
 
@@ -20,6 +21,12 @@ const RemindersPage = () => {
   const [form, setForm] = useState({ prescription_id: '', patient_id: '', scheduled_times: ['08:00'], days_of_week: [...DAYS], notes: '' })
   const [formLoading, setFormLoading] = useState(false)
   const [errors, setErrors] = useState({})
+
+  // Alarm & notification state
+  const [alarmReminder, setAlarmReminder] = useState(null)
+  const [notifEnabled, setNotifEnabled] = useState(notificationService.isEnabled)
+  const [snoozedReminders, setSnoozedReminders] = useState({})
+  const checkIntervalRef = useRef(null)
 
   useEffect(() => {
     patientService.getAll({ limit: 100 }).then(r => {
@@ -42,6 +49,70 @@ const RemindersPage = () => {
       setPrescriptions([])
     }
   }, [selectedPatient])
+
+  // Start/stop notification checking when reminders change
+  useEffect(() => {
+    if (notifEnabled && reminders.length > 0) {
+      startReminderChecking()
+    }
+    return () => stopReminderChecking()
+  }, [reminders, notifEnabled])
+
+  const startReminderChecking = useCallback(() => {
+    stopReminderChecking()
+    checkIntervalRef.current = setInterval(() => {
+      checkForDueReminders()
+    }, 30000)
+    checkForDueReminders()
+  }, [reminders, snoozedReminders])
+
+  const stopReminderChecking = () => {
+    if (checkIntervalRef.current) {
+      clearInterval(checkIntervalRef.current)
+      checkIntervalRef.current = null
+    }
+  }
+
+  const checkForDueReminders = () => {
+    if (!notifEnabled || !reminders.length) return
+
+    const now = new Date()
+    const currentDay = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][now.getDay()]
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+
+    for (const reminder of reminders) {
+      if (!reminder.is_active) continue
+
+      const days = reminder.days_of_week || []
+      if (!days.includes(currentDay)) continue
+
+      const time = reminder.scheduled_time || ''
+      const [h, m] = time.split(':').map(Number)
+      if (isNaN(h) || isNaN(m)) continue
+
+      const reminderMinutes = h * 60 + m
+      const diff = Math.abs(currentMinutes - reminderMinutes)
+
+      // Check snooze
+      const snoozeUntil = snoozedReminders[reminder.id]
+      if (snoozeUntil && now.getTime() < snoozeUntil) continue
+
+      const fireKey = `${reminder.id}-${now.toDateString()}-${time}`
+
+      if (diff <= 1 && !sessionStorage.getItem(fireKey)) {
+        sessionStorage.setItem(fireKey, '1')
+        setAlarmReminder(reminder)
+
+        if (notificationService.permission === 'granted') {
+          notificationService.showNotification(
+            'Waktunya Minum Obat!',
+            `${reminder.patient_name || 'Pasien'} — ${reminder.medication_name || 'Obat'}\nJadwal: ${time.substring(0, 5)}`,
+            { tag: `reminder-${reminder.id}` }
+          )
+        }
+      }
+    }
+  }
 
   const fetchReminders = async (patientId) => {
     setLoading(true)
@@ -78,11 +149,11 @@ const RemindersPage = () => {
     setFormLoading(true)
     try {
       const promises = form.scheduled_times.map(time => {
-        return reminderService.create({ 
-          ...form, 
+        return reminderService.create({
+          ...form,
           scheduled_time: time,
-          patient_id: parseInt(selectedPatient), 
-          prescription_id: parseInt(form.prescription_id) 
+          patient_id: parseInt(selectedPatient),
+          prescription_id: parseInt(form.prescription_id)
         })
       })
       await Promise.all(promises)
@@ -112,20 +183,147 @@ const RemindersPage = () => {
     } catch { toast.error('Gagal mengubah status reminder') }
   }
 
+  const handleEnableNotifications = async () => {
+    if (!notificationService.isSupported) {
+      toast.error('Browser tidak mendukung notifikasi')
+      return
+    }
+    const result = await notificationService.requestPermission()
+    if (result === 'granted') {
+      notificationService.enable()
+      setNotifEnabled(true)
+      toast.success('Notifikasi diaktifkan!')
+    } else if (result === 'denied') {
+      toast.error('Izin notifikasi ditolak. Aktifkan di pengaturan browser.')
+    }
+  }
+
+  const handleDisableNotifications = () => {
+    notificationService.disable()
+    setNotifEnabled(false)
+    toast.success('Notifikasi dinonaktifkan')
+  }
+
+  const handleAlarmDismiss = () => {
+    setAlarmReminder(null)
+  }
+
+  const handleAlarmSnooze = (reminder) => {
+    const snoozeUntil = Date.now() + 5 * 60 * 1000
+    setSnoozedReminders(prev => ({ ...prev, [reminder.id]: snoozeUntil }))
+    setAlarmReminder(null)
+    toast.success('Alarm ditunda 5 menit')
+  }
+
+  const handleAlarmTaken = (reminder) => {
+    setAlarmReminder(null)
+    toast.success('Obat sudah diminum!')
+  }
+
+  const handleTestNotification = () => {
+    if (!notificationService.isSupported) {
+      toast.error('Browser tidak mendukung notifikasi')
+      return
+    }
+    if (notificationService.permission !== 'granted') {
+      toast('Klik "Aktifkan Notifikasi" terlebih dahulu', { icon: 'i' })
+      return
+    }
+    notificationService.showNotification(
+      'Tes Notifikasi',
+      'Jika ini muncul, notifikasi browser berjalan dengan baik!',
+      { tag: 'test-notification' }
+    )
+    toast.success('Notifikasi tes dikirim!')
+  }
+
+  const handleTestAlarm = () => {
+    const mockReminder = reminders.length > 0 ? reminders[0] : {
+      id: 0,
+      patient_name: 'Pasien Tes',
+      medication_name: 'Obat Tes',
+      scheduled_time: new Date().toTimeString().substring(0, 5),
+      notes: 'Ini adalah tes alarm'
+    }
+    setAlarmReminder(mockReminder)
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
+      {/* Alarm Modal */}
+      {alarmReminder && (
+        <AlarmModal
+          reminder={alarmReminder}
+          onDismiss={handleAlarmDismiss}
+          onSnooze={handleAlarmSnooze}
+          onTaken={handleAlarmTaken}
+        />
+      )}
+
       <div className="page-header">
         <div>
           <h1 className="page-title">Jadwal Reminder</h1>
           <p className="page-subtitle">Kelola pengingat minum obat per pasien</p>
         </div>
-        {user?.role === 'user' && (
-          <button onClick={() => { setShowForm(!showForm); setForm(p => ({ ...p, patient_id: selectedPatient })) }}
-            className="btn-primary">
-            {showForm ? <><X size={16} /> Tutup</> : <><Plus size={16} /> Tambah Reminder</>}
+        <div className="flex items-center gap-2">
+          {/* Notification Toggle */}
+          {notificationService.isSupported && (
+            notifEnabled ? (
+              <button onClick={handleDisableNotifications}
+                className="btn-secondary flex items-center gap-1.5 text-sm"
+                title="Nonaktifkan notifikasi browser">
+                <BellRing size={16} className="text-teal-500" />
+                <span className="hidden sm:inline">Notifikasi Aktif</span>
+              </button>
+            ) : (
+              <button onClick={handleEnableNotifications}
+                className="btn-secondary flex items-center gap-1.5 text-sm"
+                title="Aktifkan notifikasi browser">
+                <BellOff size={16} className="text-slate-400" />
+                <span className="hidden sm:inline">Aktifkan Notifikasi</span>
+              </button>
+            )
+          )}
+
+          {/* Test Buttons */}
+          <button onClick={handleTestNotification}
+            className="btn-secondary text-sm hidden sm:flex items-center gap-1.5"
+            title="Tes notifikasi browser">
+            <Bell size={14} />
+            Tes
           </button>
-        )}
+          <button onClick={handleTestAlarm}
+            className="btn-secondary text-sm hidden sm:flex items-center gap-1.5"
+            title="Tes alarm popup">
+            <BellRing size={14} />
+            Tes Alarm
+          </button>
+
+          {user?.role === 'user' && (
+            <button onClick={() => { setShowForm(!showForm); setForm(p => ({ ...p, patient_id: selectedPatient })) }}
+              className="btn-primary">
+              {showForm ? <><X size={16} /> Tutup</> : <><Plus size={16} /> Tambah Reminder</>}
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Notification Info Banner */}
+      {notificationService.isSupported && !notifEnabled && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
+          <BellOff size={20} className="text-amber-500 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-amber-800">Notifikasi Browser Belum Aktif</p>
+            <p className="text-xs text-amber-600 mt-1">
+              Aktifkan notifikasi agar Anda mendapat peringatan saat waktu minum obat tiba.
+            </p>
+            <button onClick={handleEnableNotifications}
+              className="mt-2 text-xs font-semibold text-amber-700 hover:text-amber-900 underline underline-offset-2">
+              Aktifkan Sekarang
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Patient Selector */}
       <div className="card p-4">
@@ -145,7 +343,7 @@ const RemindersPage = () => {
             <div>
               <label className="form-label">Resep Aktif <span className="text-red-500">*</span></label>
               <select className={`form-select ${errors.prescription_id ? 'form-input-error' : ''}`}
-                value={form.prescription_id} 
+                value={form.prescription_id}
                 onChange={e => {
                   const pid = e.target.value
                   const rx = prescriptions.find(r => r.id.toString() === pid)
@@ -178,7 +376,7 @@ const RemindersPage = () => {
                   <div key={idx} className="flex flex-col">
                     <span className="text-xs text-slate-500 mb-1">Waktu {idx + 1}</span>
                     <input type="time" className={`form-input w-32 ${errors.scheduled_times ? 'form-input-error' : ''}`}
-                      value={time} 
+                      value={time}
                       onChange={e => {
                         const newTimes = [...form.scheduled_times]
                         newTimes[idx] = e.target.value

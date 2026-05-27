@@ -4,8 +4,11 @@ import 'package:provider/provider.dart';
 import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/patient_service.dart';
+import '../services/reminder_service.dart';
 import '../services/firestore_service.dart';
 import '../models/patient.dart';
+import '../models/reminder.dart';
+import '../utils/helpers.dart';
 import '../main.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -17,8 +20,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final PatientService _patientService = PatientService();
+  final ReminderService _reminderService = ReminderService();
   final FirestoreService _firestoreService = FirestoreService();
   List<Patient> _patients = [];
+  List<Reminder> _todayReminders = [];
   bool _loading = true;
   int _unsyncedCount = 0;
 
@@ -32,6 +37,22 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _loading = true);
     try {
       _patients = await _patientService.getAll();
+
+      // Load today's reminders for all patients
+      final todayKey = Helpers.todayKey();
+      final allReminders = <Reminder>[];
+      for (final patient in _patients) {
+        try {
+          final reminders = await _reminderService.getByPatient(patient.id);
+          for (final r in reminders) {
+            if (r.isActive && r.daysOfWeek.contains(todayKey)) {
+              allReminders.add(r);
+            }
+          }
+        } catch (_) {}
+      }
+      allReminders.sort((a, b) => a.scheduledMinutes.compareTo(b.scheduledMinutes));
+      _todayReminders = allReminders;
 
       // Cek log offline yang belum disync
       final auth = context.read<AuthProvider>();
@@ -66,6 +87,11 @@ class _HomeScreenState extends State<HomeScreen> {
   void _navigateToTab(int index) {
     final navState = context.findAncestorStateOfType<MainNavigatorState>();
     navState?.setTab(index);
+  }
+
+  String _getTodayKey() {
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    return days[DateTime.now().weekday - 1];
   }
 
   @override
@@ -173,8 +199,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 12),
                 _StatCard(
                   icon: Icons.notifications_active,
-                  label: 'Reminder',
-                  value: 'Aktif',
+                  label: 'Reminder Hari Ini',
+                  value: '${_todayReminders.length}',
                   color: AppTheme.secondary,
                   loading: _loading,
                 ),
@@ -214,7 +240,171 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Patients List ───────────────────────────
+            // ── Today's Reminders ──────────────────────────
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Reminder Hari Ini',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppTheme.textPrimary),
+                ),
+                Text(
+                  '${_todayReminders.length} jadwal',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            if (_loading)
+              const SizedBox.shrink()
+            else if (_todayReminders.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.border),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: AppTheme.success.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.check_circle_outline, color: AppTheme.success, size: 22),
+                    ),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Tidak ada jadwal obat hari ini',
+                        style: TextStyle(fontSize: 13, color: AppTheme.textMuted),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...(_todayReminders.take(5).map((r) {
+                final nowMinutes = DateTime.now().hour * 60 + DateTime.now().minute;
+                final isPast = r.scheduledMinutes < nowMinutes;
+                final isSoon = !isPast && (r.scheduledMinutes - nowMinutes) <= 30;
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: () => _navigateToTab(2),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isSoon
+                              ? AppTheme.warning.withOpacity(0.5)
+                              : isPast
+                                  ? AppTheme.border
+                                  : AppTheme.primary.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: isSoon
+                                  ? AppTheme.warning.withOpacity(0.1)
+                                  : isPast
+                                      ? AppTheme.textMuted.withOpacity(0.1)
+                                      : AppTheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              isPast ? Icons.check_circle : Icons.alarm,
+                              color: isSoon
+                                  ? AppTheme.warning
+                                  : isPast
+                                      ? AppTheme.textMuted
+                                      : AppTheme.primary,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      r.timeShort,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
+                                        fontFamily: 'monospace',
+                                        color: isPast ? AppTheme.textMuted : AppTheme.textPrimary,
+                                      ),
+                                    ),
+                                    if (isSoon) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.warning.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: const Text(
+                                          'Segera',
+                                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppTheme.warning),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${r.patientName ?? "Pasien"} — ${r.medicationName ?? "Obat"}',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isPast ? AppTheme.textMuted : AppTheme.textSecondary,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.chevron_right,
+                            color: AppTheme.textMuted.withOpacity(0.5),
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              })),
+
+            if (_todayReminders.length > 5)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: TextButton(
+                  onPressed: () => _navigateToTab(2),
+                  child: Text(
+                    'Lihat semua ${_todayReminders.length} reminder',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 24),
+
+            // ── Lansia Terdaftar ───────────────────────────
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [

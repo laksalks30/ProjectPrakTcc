@@ -1,5 +1,3 @@
-// ============ FILE: mobile_app/lib/services/notification_service.dart ============
-// 🔔 Notification Service — Notifikasi lokal + suara
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -13,13 +11,19 @@ class NotificationService {
   static const String _channelName = 'Pengingat Obat';
   static const String _channelDesc = 'Notifikasi pengingat minum obat';
 
-  /// Inisialisasi plugin notifikasi
+  static const String _alarmChannelId = 'obat_lansia_alarm_v1';
+  static const String _alarmChannelName = 'Alarm Obat';
+  static const String _alarmChannelDesc = 'Alarm pengingat minum obat dengan suara';
+
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+  static void Function(String payload)? onNotificationTapped;
+
   static Future<void> initialize() async {
     if (_initialized) return;
 
     tz.initializeTimeZones();
     try {
-      // Best-effort: set local time zone if name is recognized.
       final name = DateTime.now().timeZoneName;
       tz.setLocalLocation(tz.getLocation(name));
     } catch (_) {}
@@ -29,12 +33,9 @@ class NotificationService {
 
     await _plugin.initialize(
       initSettings,
-      onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // Handle tap pada notifikasi
-      },
+      onDidReceiveNotificationResponse: _onNotificationResponse,
     );
 
-    // Request permission untuk Android 13+
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.requestNotificationsPermission();
     try {
@@ -52,15 +53,35 @@ class NotificationService {
       ),
     );
 
+    await androidPlugin?.createNotificationChannel(
+      const AndroidNotificationChannel(
+        _alarmChannelId,
+        _alarmChannelName,
+        description: _alarmChannelDesc,
+        importance: Importance.max,
+        enableVibration: true,
+        playSound: true,
+        enableLights: true,
+        ledColor: Color(0xFF14B8A6),
+      ),
+    );
+
     _initialized = true;
   }
 
-  /// Tampilkan notifikasi langsung
+  static void _onNotificationResponse(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload != null && payload.isNotEmpty && onNotificationTapped != null) {
+      onNotificationTapped!(payload);
+    }
+  }
+
   static Future<void> showNotification({
     required int id,
     required String title,
     required String body,
     String? sound,
+    String? payload,
   }) async {
     final androidDetails = AndroidNotificationDetails(
       _channelId,
@@ -79,14 +100,50 @@ class NotificationService {
       title,
       body,
       NotificationDetails(android: androidDetails),
+      payload: payload,
     );
   }
 
-  /// Jadwalkan notifikasi mingguan berdasarkan hari dan waktu
+  static Future<void> showAlarmNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    final androidDetails = AndroidNotificationDetails(
+      _alarmChannelId,
+      _alarmChannelName,
+      channelDescription: _alarmChannelDesc,
+      importance: Importance.max,
+      priority: Priority.max,
+      playSound: true,
+      enableVibration: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(body),
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+      ongoing: true,
+      autoCancel: false,
+      actions: <AndroidNotificationAction>[
+        const AndroidNotificationAction('taken', 'Sudah Diminum', showsUserInterface: true),
+        const AndroidNotificationAction('snooze', 'Tunda 5 Menit', showsUserInterface: true),
+      ],
+    );
+
+    await _plugin.show(
+      id,
+      title,
+      body,
+      NotificationDetails(android: androidDetails),
+      payload: payload,
+    );
+  }
+
   static Future<void> scheduleWeeklyReminder({
     required int reminderId,
-    required String dayKey, // monday, tuesday, ...
-    required String time, // HH:mm
+    required String dayKey,
+    required String time,
     required String patientName,
     required String medicationName,
     String? dosage,
@@ -106,64 +163,73 @@ class NotificationService {
     final doseText = (dosage != null && dosage.trim().isNotEmpty) ? ' (${dosage.trim()})' : '';
     final body = '$patientName — $medicationName$doseText\nJadwal: $time';
 
+    final payload = 'reminder|$reminderId|$patientName|$medicationName|${dosage ?? ""}|$time';
+
     final androidDetails = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.high,
-      priority: Priority.high,
+      _alarmChannelId,
+      _alarmChannelName,
+      channelDescription: _alarmChannelDesc,
+      importance: Importance.max,
+      priority: Priority.max,
       playSound: true,
       enableVibration: true,
       icon: '@mipmap/ic_launcher',
       styleInformation: BigTextStyleInformation(body),
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
     );
 
     try {
       await _plugin.zonedSchedule(
         id,
-        '💊 Waktunya Minum Obat!',
+        'Waktunya Minum Obat!',
         body,
         scheduledDate,
         NotificationDetails(android: androidDetails),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
       );
     } catch (_) {
       await _plugin.zonedSchedule(
         id,
-        '💊 Waktunya Minum Obat!',
+        'Waktunya Minum Obat!',
         body,
         scheduledDate,
         NotificationDetails(android: androidDetails),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
       );
     }
   }
 
-  /// Jadwalkan notifikasi sekali dalam beberapa menit (debug)
   static Future<void> scheduleInMinutes({
     required int id,
     required int minutes,
     required String title,
     required String body,
+    String? payload,
   }) async {
     if (kIsWeb) return;
     final now = tz.TZDateTime.now(tz.local);
     final scheduled = now.add(Duration(minutes: minutes));
 
     final androidDetails = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.high,
-      priority: Priority.high,
+      _alarmChannelId,
+      _alarmChannelName,
+      channelDescription: _alarmChannelDesc,
+      importance: Importance.max,
+      priority: Priority.max,
       playSound: true,
       enableVibration: true,
       icon: '@mipmap/ic_launcher',
       styleInformation: BigTextStyleInformation(body),
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.alarm,
     );
 
     try {
@@ -175,6 +241,7 @@ class NotificationService {
         NotificationDetails(android: androidDetails),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
       );
     } catch (_) {
       await _plugin.zonedSchedule(
@@ -185,17 +252,16 @@ class NotificationService {
         NotificationDetails(android: androidDetails),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
       );
     }
   }
 
-  /// Debug: jumlah notifikasi terjadwal
   static Future<int> pendingCount() async {
     final list = await _plugin.pendingNotificationRequests();
     return list.length;
   }
 
-  /// Batalkan semua jadwal notifikasi untuk reminder tertentu
   static Future<void> cancelReminderSchedules({
     required int reminderId,
     required List<String> days,
@@ -254,12 +320,11 @@ class NotificationService {
   }
 
   static int _buildNotificationId(int reminderId, int weekday, int hour, int minute) {
-    final timeKey = hour * 60 + minute; // 0..1439
+    final timeKey = hour * 60 + minute;
     final safeReminder = reminderId % 100000;
     return safeReminder * 100000 + weekday * 10000 + timeKey;
   }
 
-  /// Tampilkan notifikasi pengingat minum obat
   static Future<void> showMedicationReminder({
     required int reminderId,
     required String patientName,
@@ -267,19 +332,19 @@ class NotificationService {
     required String dosage,
     required String time,
   }) async {
-    await showNotification(
+    final payload = 'reminder|$reminderId|$patientName|$medicationName|$dosage|$time';
+    await showAlarmNotification(
       id: reminderId,
-      title: '💊 Waktunya Minum Obat!',
+      title: 'Waktunya Minum Obat!',
       body: '$patientName — $medicationName ($dosage)\nJadwal: $time',
+      payload: payload,
     );
   }
 
-  /// Cancel notifikasi
   static Future<void> cancelNotification(int id) async {
     await _plugin.cancel(id);
   }
 
-  /// Cancel semua notifikasi
   static Future<void> cancelAll() async {
     await _plugin.cancelAll();
   }

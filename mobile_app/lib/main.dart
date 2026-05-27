@@ -1,4 +1,3 @@
-// ============ FILE: mobile_app/lib/main.dart ============
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -16,6 +15,7 @@ import 'screens/patients_screen.dart';
 import 'screens/reminders_screen.dart';
 import 'screens/logs_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/alarm_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,8 +45,42 @@ void main() async {
   runApp(const ObatLansiaApp());
 }
 
-class ObatLansiaApp extends StatelessWidget {
+class ObatLansiaApp extends StatefulWidget {
   const ObatLansiaApp({super.key});
+
+  @override
+  State<ObatLansiaApp> createState() => _ObatLansiaAppState();
+}
+
+class _ObatLansiaAppState extends State<ObatLansiaApp> {
+  @override
+  void initState() {
+    super.initState();
+    NotificationService.onNotificationTapped = _handleNotificationTap;
+  }
+
+  void _handleNotificationTap(String payload) {
+    final parts = payload.split('|');
+    if (parts.isEmpty || parts[0] != 'reminder') return;
+
+    final reminderId = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
+    final patientName = parts.length > 2 ? parts[2] : 'Pasien';
+    final medicationName = parts.length > 3 ? parts[3] : 'Obat';
+    final dosage = parts.length > 4 ? parts[4] : '';
+    final time = parts.length > 5 ? parts[5] : '';
+
+    NotificationService.navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => AlarmScreen(
+          reminderId: reminderId,
+          patientName: patientName,
+          medicationName: medicationName,
+          dosage: dosage,
+          time: time,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,6 +89,7 @@ class ObatLansiaApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
+            navigatorKey: NotificationService.navigatorKey,
             title: 'ObatLansia',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
@@ -160,7 +195,6 @@ class MainNavigatorState extends State<MainNavigator> {
             IconButton(
               icon: const Icon(Icons.refresh, size: 22),
               onPressed: () {
-                // Trigger refresh on HomeScreen
                 setState(() {});
               },
             ),
