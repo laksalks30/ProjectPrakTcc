@@ -75,7 +75,7 @@ gcloud run deploy "$AUTH_SERVICE" \
   --cpu=1 \
   --min-instances=0 \
   --max-instances=10 \
-  --set-env-vars="NODE_ENV=production,PORT=8001" \
+  --set-env-vars="NODE_ENV=production,PORT=8001,JWT_SECRET=rahasia_jwt_produksi_123" \
   --project="$PROJECT_ID"
 
 AUTH_URL=$(gcloud run services describe "$AUTH_SERVICE" \
@@ -95,7 +95,7 @@ gcloud run deploy "$MED_SERVICE" \
   --cpu=1 \
   --min-instances=0 \
   --max-instances=10 \
-  --set-env-vars="PORT=8002" \
+  --set-env-vars="PORT=8002,JWT_SECRET=rahasia_jwt_produksi_123" \
   --project="$PROJECT_ID"
 
 MED_URL=$(gcloud run services describe "$MED_SERVICE" \
@@ -115,6 +115,18 @@ gcloud app deploy app.yaml --quiet --project="$PROJECT_ID"
 cd ..
 
 FRONTEND_URL="https://${PROJECT_ID}.appspot.com"
+
+# ─── Update CORS Origin ──────────────────────────────────────────
+echo "[9/9] Updating CORS Origin for Backend Services..."
+gcloud run services update "$AUTH_SERVICE" \
+  --region="$REGION" \
+  --update-env-vars="CORS_ORIGIN=$FRONTEND_URL" \
+  --project="$PROJECT_ID" > /dev/null 2>&1
+
+gcloud run services update "$MED_SERVICE" \
+  --region="$REGION" \
+  --update-env-vars="CORS_ORIGIN=$FRONTEND_URL" \
+  --project="$PROJECT_ID" > /dev/null 2>&1
 
 echo ""
 echo "=================================================="

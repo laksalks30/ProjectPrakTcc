@@ -38,12 +38,26 @@ authApi.interceptors.request.use(attachToken)
 medApi.interceptors.request.use(attachToken)
 
 // ─── Response Interceptor: Handle 401 ────────────────────────────
+let isRedirecting = false
+
 const handleAuthError = (error) => {
-  if (error.response?.status === 401) {
+  // Hanya logout jika benar-benar dapat response 401 dari server
+  // Jangan logout jika network error / CORS error (error.response undefined)
+  if (
+    error.response?.status === 401 &&
+    !isRedirecting &&
+    !error.config?.url?.includes('/login') &&
+    !error.config?.url?.includes('/register')
+  ) {
+    isRedirecting = true
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    window.location.href = '/login'
     toast.error('Sesi berakhir. Silakan login kembali.')
+    // Delay sedikit agar toast terlihat
+    setTimeout(() => {
+      window.location.href = '/login'
+      isRedirecting = false
+    }, 500)
   }
   return Promise.reject(error)
 }

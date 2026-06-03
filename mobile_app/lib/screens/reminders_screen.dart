@@ -8,6 +8,7 @@ import '../services/patient_service.dart';
 import '../services/prescription_service.dart';
 import '../services/reminder_service.dart';
 import '../services/notification_service.dart';
+import '../services/alarm_service.dart';
 import '../widgets/reminder_card.dart';
 import '../utils/helpers.dart';
 
@@ -277,12 +278,18 @@ class _RemindersScreenState extends State<RemindersScreen> {
                     OutlinedButton.icon(
                       onPressed: _testNotification,
                       icon: const Icon(Icons.notifications_active, size: 18),
-                      label: const Text('Tes'),
+                      label: const Text('Tes Notif'),
                     ),
-                    OutlinedButton.icon(
-                      onPressed: _testScheduledNotification,
-                      icon: const Icon(Icons.schedule, size: 18),
-                      label: const Text('Tes Jadwal'),
+                    // Tombol Tes Alarm dengan suara
+                    ElevatedButton.icon(
+                      onPressed: () => AlarmService().testAlarm(context),
+                      icon: const Icon(Icons.alarm, size: 18),
+                      label: const Text('Tes Alarm'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEE5A24),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
                     ),
                     ElevatedButton.icon(
                       onPressed: () => setState(() => _showForm = !_showForm),
@@ -296,7 +303,101 @@ class _RemindersScreenState extends State<RemindersScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // ── Alarm Status Panel ───────────────────────
+            ListenableBuilder(
+              listenable: AlarmService(),
+              builder: (context, _) {
+                final alarm = AlarmService();
+                final isRinging = alarm.isAlarmPlaying;
+                final next = alarm.nextReminder;
+                final minutesLeft = alarm.minutesUntilNext;
+                final totalActive = alarm.activeReminders.length;
+
+                if (isRinging) {
+                  return _AlarmRingingBanner(
+                    onStop: () => alarm.stopAlarm(),
+                  );
+                }
+
+                if (totalActive == 0) return const SizedBox.shrink();
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 2),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: next != null && minutesLeft != null && minutesLeft <= 30
+                          ? [const Color(0xFFFFF3E0), const Color(0xFFFFE0B2)]
+                          : [const Color(0xFFE8F5E9), const Color(0xFFC8E6C9)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: next != null && minutesLeft != null && minutesLeft <= 30
+                          ? Colors.orange.withOpacity(0.4)
+                          : Colors.green.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: next != null && minutesLeft != null && minutesLeft <= 30
+                              ? Colors.orange.withOpacity(0.2)
+                              : Colors.green.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          Icons.alarm,
+                          color: next != null && minutesLeft != null && minutesLeft <= 30
+                              ? Colors.orange
+                              : Colors.green,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Alarm Aktif: $totalActive reminder',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF2D3436)),
+                            ),
+                            if (next != null && minutesLeft != null) ...[  
+                              const SizedBox(height: 2),
+                              Text(
+                                minutesLeft <= 0
+                                    ? '🔔 Alarm ${next.timeShort} seharusnya berbunyi sekarang!'
+                                    : minutesLeft <= 60
+                                        ? '⏰ Berikutnya: ${next.timeShort} (${next.medicationName ?? "Obat"}) — $minutesLeft mnt lagi'
+                                        : '⏰ Berikutnya hari ini: ${next.timeShort} (${next.medicationName ?? "Obat"})',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: minutesLeft <= 30 ? Colors.orange.shade700 : Colors.green.shade700,
+                                ),
+                              ),
+                            ] else ...[
+                              const SizedBox(height: 2),
+                              const Text(
+                                '✅ Semua alarm hari ini sudah selesai',
+                                style: TextStyle(fontSize: 11, color: Colors.green),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 14),
 
             // ── Patient Selector ────────────────────────
             Container(
@@ -569,6 +670,96 @@ class _EmptyState extends StatelessWidget {
             Icon(icon, size: 40, color: AppTheme.textMuted.withOpacity(0.3)),
             const SizedBox(height: 8),
             Text(message, style: const TextStyle(color: AppTheme.textMuted), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Alarm Ringing Banner ─────────────────────────────────────────────
+class _AlarmRingingBanner extends StatefulWidget {
+  final VoidCallback onStop;
+  const _AlarmRingingBanner({required this.onStop});
+
+  @override
+  State<_AlarmRingingBanner> createState() => _AlarmRingingBannerState();
+}
+
+class _AlarmRingingBannerState extends State<_AlarmRingingBanner>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+    _opacity = Tween<double>(begin: 0.7, end: 1.0).animate(_ctrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 2),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFF6B6B), Color(0xFFEE5A24)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withOpacity(0.3),
+              blurRadius: 12,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.alarm, color: Colors.white, size: 28),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '🔔 Alarm Berbunyi Sekarang!',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Waktunya minum obat — sentuh untuk matikan',
+                    style: TextStyle(fontSize: 11, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: widget.onStop,
+              icon: const Icon(Icons.alarm_off, size: 16),
+              label: const Text('Stop', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFFEE5A24),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
           ],
         ),
       ),

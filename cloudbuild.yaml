@@ -37,19 +37,9 @@ steps:
       - './medication-service'
 
   # ─────────────────────────────────────────────────────────────
-  # STEP 3: Build Frontend Docker Image
+  # NOTE: Frontend dibangun di step terakhir setelah Cloud Run deploy,
+  # agar URL API yang benar bisa diambil secara dinamis.
   # ─────────────────────────────────────────────────────────────
-  - name: 'gcr.io/cloud-builders/docker'
-    id: 'build-frontend'
-    args:
-      - 'build'
-      - '-t'
-      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/obatlansia/${_FRONTEND_APP}:$SHORT_SHA'
-      - '--build-arg'
-      - 'VITE_AUTH_SERVICE_URL=https://${_AUTH_SERVICE_NAME}-xxxxxxxxxx-${_REGION}.a.run.app/api/auth'
-      - '--build-arg'
-      - 'VITE_MEDICATION_SERVICE_URL=https://${_MED_SERVICE_NAME}-xxxxxxxxxx-${_REGION}.a.run.app/api'
-      - './frontend'
 
   # ─────────────────────────────────────────────────────────────
   # STEP 4: Push Auth Service Image
@@ -121,7 +111,7 @@ steps:
       - '--set-secrets=DB_HOST=DB_HOST:latest,DB_PASSWORD=DB_PASSWORD:latest,JWT_SECRET=JWT_SECRET:latest'
 
   # ─────────────────────────────────────────────────────────────
-  # STEP 8: Deploy Frontend to App Engine
+  # STEP 6: Build & Deploy Frontend with ACTUAL Cloud Run URLs
   # ─────────────────────────────────────────────────────────────
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     id: 'build-and-deploy-frontend'
@@ -131,7 +121,15 @@ steps:
     args:
       - '-c'
       - |
+        # Ambil URL Cloud Run yang sebenarnya setelah deploy
+        AUTH_URL=$(gcloud run services describe ${_AUTH_SERVICE_NAME} --region=${_REGION} --format="value(status.url)" --project=$PROJECT_ID)
+        MED_URL=$(gcloud run services describe ${_MED_SERVICE_NAME} --region=${_REGION} --format="value(status.url)" --project=$PROJECT_ID)
+        echo "Auth URL: $${AUTH_URL}"
+        echo "Med URL: $${MED_URL}"
+        # Build frontend dengan URL yang benar
         npm ci &&
+        VITE_AUTH_SERVICE_URL="$${AUTH_URL}/api/auth" \
+        VITE_MEDICATION_SERVICE_URL="$${MED_URL}/api" \
         npm run build &&
         gcloud app deploy app.yaml --quiet --project=$PROJECT_ID
 

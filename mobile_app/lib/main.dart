@@ -1,3 +1,4 @@
+// ============ FILE: mobile_app/lib/main.dart ============
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -7,7 +8,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'config/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'services/notification_service.dart';
-
+import 'services/alarm_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
@@ -15,7 +16,6 @@ import 'screens/patients_screen.dart';
 import 'screens/reminders_screen.dart';
 import 'screens/logs_screen.dart';
 import 'screens/profile_screen.dart';
-import 'screens/alarm_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -45,42 +45,8 @@ void main() async {
   runApp(const ObatLansiaApp());
 }
 
-class ObatLansiaApp extends StatefulWidget {
+class ObatLansiaApp extends StatelessWidget {
   const ObatLansiaApp({super.key});
-
-  @override
-  State<ObatLansiaApp> createState() => _ObatLansiaAppState();
-}
-
-class _ObatLansiaAppState extends State<ObatLansiaApp> {
-  @override
-  void initState() {
-    super.initState();
-    NotificationService.onNotificationTapped = _handleNotificationTap;
-  }
-
-  void _handleNotificationTap(String payload) {
-    final parts = payload.split('|');
-    if (parts.isEmpty || parts[0] != 'reminder') return;
-
-    final reminderId = int.tryParse(parts.length > 1 ? parts[1] : '0') ?? 0;
-    final patientName = parts.length > 2 ? parts[2] : 'Pasien';
-    final medicationName = parts.length > 3 ? parts[3] : 'Obat';
-    final dosage = parts.length > 4 ? parts[4] : '';
-    final time = parts.length > 5 ? parts[5] : '';
-
-    NotificationService.navigatorKey.currentState?.push(
-      MaterialPageRoute(
-        builder: (_) => AlarmScreen(
-          reminderId: reminderId,
-          patientName: patientName,
-          medicationName: medicationName,
-          dosage: dosage,
-          time: time,
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,7 +55,6 @@ class _ObatLansiaAppState extends State<ObatLansiaApp> {
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
-            navigatorKey: NotificationService.navigatorKey,
             title: 'ObatLansia',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
@@ -175,6 +140,21 @@ class MainNavigatorState extends State<MainNavigator> {
     ProfileScreen(),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    // Jalankan alarm service di background saat berada di MainNavigator
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AlarmService().start(context);
+    });
+  }
+
+  @override
+  void dispose() {
+    AlarmService().stop();
+    super.dispose();
+  }
+
   void _onTabTapped(int index) {
     setState(() => _currentIndex = index);
   }
@@ -186,48 +166,197 @@ class MainNavigatorState extends State<MainNavigator> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_titles[_currentIndex]),
-        centerTitle: false,
-        actions: [
-          if (_currentIndex == 0)
-            IconButton(
-              icon: const Icon(Icons.refresh, size: 22),
-              onPressed: () {
-                setState(() {});
-              },
+    final alarm = AlarmService();
+    return ListenableBuilder(
+      listenable: alarm,
+      builder: (context, _) {
+        final isRinging = alarm.isAlarmPlaying;
+        final activeCount = alarm.activeReminders.length;
+        final nextRem = alarm.nextReminder;
+        final minutesLeft = alarm.minutesUntilNext;
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(_titles[_currentIndex]),
+            centerTitle: false,
+            actions: [
+              // ── Alarm Indicator ──────────────────────────
+              if (isRinging)
+                _PulsingAlarmButton(
+                  onTap: () => AlarmService().testAlarm(context),
+                )
+              else if (activeCount > 0)
+                Padding(
+                  padding: const EdgeInsets.only(right: 4),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: () => _onTabTapped(2),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              const Icon(Icons.alarm, size: 22),
+                              if (activeCount > 0)
+                                Positioned(
+                                  top: -6,
+                                  right: -6,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFFEE5A24),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Text(
+                                      '$activeCount',
+                                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w800),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          if (nextRem != null && minutesLeft != null && minutesLeft <= 60) ...[  
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: minutesLeft <= 10
+                                    ? const Color(0xFFEE5A24).withOpacity(0.15)
+                                    : const Color(0xFF0984E3).withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                minutesLeft <= 0
+                                    ? 'Sekarang!'
+                                    : minutesLeft == 1
+                                        ? '1 mnt lagi'
+                                        : '$minutesLeft mnt lagi',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: minutesLeft <= 10 ? const Color(0xFFEE5A24) : const Color(0xFF0984E3),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              if (_currentIndex == 0)
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 22),
+                  onPressed: () => setState(() {}),
+                ),
+            ],
+          ),
+          body: IndexedStack(
+            index: _currentIndex,
+            children: _screens,
+          ),
+          bottomNavigationBar: Container(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
             ),
-        ],
-      ),
-      body: IndexedStack(
-        index: _currentIndex,
-        children: _screens,
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 16,
-              offset: const Offset(0, -4),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: _onTabTapped,
+              items: [
+                const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Beranda'),
+                const BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Lansia'),
+                BottomNavigationBarItem(
+                  icon: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      const Icon(Icons.alarm),
+                      if (activeCount > 0)
+                        Positioned(
+                          top: -4,
+                          right: -4,
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEE5A24),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  label: 'Reminder',
+                ),
+                const BottomNavigationBarItem(icon: Icon(Icons.checklist), label: 'Log'),
+                const BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
+              ],
             ),
-          ],
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: _onTabTapped,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Beranda'),
-            BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Lansia'),
-            BottomNavigationBarItem(icon: Icon(Icons.alarm), label: 'Reminder'),
-            BottomNavigationBarItem(icon: Icon(Icons.checklist), label: 'Log'),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profil'),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
   static const _titles = ['Dashboard', 'Data Lansia', 'Jadwal Reminder', 'Riwayat Log', 'Profil Saya'];
+}
+
+// ── Pulsing Alarm Button ─────────────────────────────────────────────
+class _PulsingAlarmButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _PulsingAlarmButton({required this.onTap});
+
+  @override
+  State<_PulsingAlarmButton> createState() => _PulsingAlarmButtonState();
+}
+
+class _PulsingAlarmButtonState extends State<_PulsingAlarmButton> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    )..repeat(reverse: true);
+    _scale = Tween<double>(begin: 1.0, end: 1.25).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: ScaleTransition(
+        scale: _scale,
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFEE5A24),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.alarm, color: Colors.white, size: 22),
+            onPressed: widget.onTap,
+            tooltip: 'Alarm Berbunyi!',
+          ),
+        ),
+      ),
+    );
+  }
 }
