@@ -5,6 +5,7 @@ import '../config/app_theme.dart';
 import '../providers/auth_provider.dart';
 import '../services/patient_service.dart';
 import '../services/reminder_service.dart';
+import '../services/notification_service.dart';
 import '../services/firestore_service.dart';
 import '../models/patient.dart';
 import '../models/reminder.dart';
@@ -54,6 +55,8 @@ class _HomeScreenState extends State<HomeScreen> {
       allReminders.sort((a, b) => a.scheduledMinutes.compareTo(b.scheduledMinutes));
       _todayReminders = allReminders;
 
+      await _syncNotificationSchedules(allReminders);
+
       // Cek log offline yang belum disync
       final auth = context.read<AuthProvider>();
       if (auth.user != null) {
@@ -82,6 +85,26 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _syncNotificationSchedules(List<Reminder> reminders) async {
+    for (final reminder in reminders) {
+      if (!reminder.isActive || reminder.daysOfWeek.isEmpty) continue;
+
+      final patientName = reminder.patientName ?? 'Pasien';
+      final medicationName = reminder.medicationName ?? 'Obat';
+
+      for (final day in reminder.daysOfWeek) {
+        await NotificationService.scheduleWeeklyReminder(
+          reminderId: reminder.id,
+          dayKey: day,
+          time: reminder.timeShort,
+          patientName: patientName,
+          medicationName: medicationName,
+          dosage: null,
+        );
+      }
+    }
   }
 
   void _navigateToTab(int index) {

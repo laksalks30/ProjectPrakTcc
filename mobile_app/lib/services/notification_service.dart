@@ -7,11 +7,11 @@ import 'package:timezone/data/latest_all.dart' as tz;
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   static bool _initialized = false;
-  static const String _channelId = 'obat_lansia_channel_v2';
+  static const String _channelId = 'obat_lansia_channel_v3';
   static const String _channelName = 'Pengingat Obat';
   static const String _channelDesc = 'Notifikasi pengingat minum obat';
 
-  static const String _alarmChannelId = 'obat_lansia_alarm_v1';
+  static const String _alarmChannelId = 'obat_lansia_alarm_v2';
   static const String _alarmChannelName = 'Alarm Obat';
   static const String _alarmChannelDesc = 'Alarm pengingat minum obat dengan suara';
 
@@ -24,8 +24,7 @@ class NotificationService {
 
     tz.initializeTimeZones();
     try {
-      final name = DateTime.now().timeZoneName;
-      tz.setLocalLocation(tz.getLocation(name));
+      tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
     } catch (_) {}
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -37,10 +36,13 @@ class NotificationService {
     );
 
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-    await androidPlugin?.requestNotificationsPermission();
+    final notifGranted = await androidPlugin?.requestNotificationsPermission();
     try {
-      await androidPlugin?.requestExactAlarmsPermission();
-    } catch (_) {}
+      final exactGranted = await androidPlugin?.requestExactAlarmsPermission();
+      debugPrint('Notification permission: $notifGranted, exact alarm permission: $exactGranted');
+    } catch (e) {
+      debugPrint('Failed to request exact alarm permission: $e');
+    }
 
     await androidPlugin?.createNotificationChannel(
       const AndroidNotificationChannel(
@@ -192,7 +194,8 @@ class NotificationService {
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('scheduleWeeklyReminder exact failed: $e');
       await _plugin.zonedSchedule(
         id,
         'Waktunya Minum Obat!',
@@ -243,7 +246,8 @@ class NotificationService {
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         payload: payload,
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint('scheduleInMinutes exact failed: $e');
       await _plugin.zonedSchedule(
         id,
         title,

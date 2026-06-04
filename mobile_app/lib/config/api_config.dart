@@ -1,13 +1,26 @@
 // ============ FILE: mobile_app/lib/config/api_config.dart ============
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 class ApiConfig {
-  // Untuk Android Emulator, gunakan 10.0.2.2 sebagai pengganti localhost
-  // Untuk device fisik, ganti dengan IP komputer Anda (misal: 192.168.x.x)
-  static const String _baseHost = kIsWeb ? 'localhost' : '127.0.0.1';
+  // Override saat run: flutter run --dart-define=API_HOST=192.168.x.x
+  // Emulator Android pakai 10.0.2.2, device fisik pakai IP komputer/LAN.
+  static const String _hostOverride = String.fromEnvironment('API_HOST', defaultValue: '');
 
-  static const String authBaseUrl = 'http://$_baseHost:8001/api/auth';
-  static const String medBaseUrl = 'http://$_baseHost:8002/api';
+  // static String get _baseHost {
+  //   if (_hostOverride.isNotEmpty) {
+  //     return _hostOverride;
+  //   }
+
+  //   if (kIsWeb) {
+  //     return 'localhost';
+  //   }
+
+  //   return '192.168.18.218';
+  // }
+
+  static String get authBaseUrl => 'https://auth-service-25672599351.asia-southeast2.run.app/api/auth';
+  static String get medBaseUrl => 'https://medication-service-25672599351.asia-southeast2.run.app/api';
 
   static const Duration timeout = Duration(seconds: 15);
 

@@ -1,4 +1,3 @@
-// ============ FILE: mobile_app/lib/services/alarm_service.dart ============
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -7,6 +6,8 @@ import '../models/reminder.dart';
 import '../models/patient.dart';
 import '../services/patient_service.dart';
 import '../services/reminder_service.dart';
+import '../services/notification_service.dart';
+import '../utils/helpers.dart';
 
 class AlarmService extends ChangeNotifier {
   static final AlarmService _instance = AlarmService._internal();
@@ -20,29 +21,25 @@ class AlarmService extends ChangeNotifier {
 
   List<Reminder> _activeReminders = [];
   bool _isPlaying = false;
+  bool _isStarted = false;
   DateTime? _lastFetchTime;
-  String? _lastPlayedTimeKey;
+  String? _lastPlayedReminderKey;
 
-  // ── Public state untuk UI ─────────────────────────────────
   bool get isAlarmPlaying => _isPlaying;
   List<Reminder> get activeReminders => List.unmodifiable(_activeReminders);
 
-  /// Reminder berikutnya yang akan berbunyi hari ini
   Reminder? get nextReminder {
     final now = DateTime.now();
-    final currentDay = DateFormat('EEEE').format(now).toLowerCase();
+    final currentDay = Helpers.todayKey();
     final currentMinutes = now.hour * 60 + now.minute;
-
     List<Reminder> todayReminders = _activeReminders
         .where((r) => r.daysOfWeek.contains(currentDay) && r.scheduledMinutes > currentMinutes)
         .toList();
-
     if (todayReminders.isEmpty) return null;
     todayReminders.sort((a, b) => a.scheduledMinutes.compareTo(b.scheduledMinutes));
     return todayReminders.first;
   }
 
-  /// Berapa menit lagi sampai alarm berikutnya
   int? get minutesUntilNext {
     final next = nextReminder;
     if (next == null) return null;
@@ -52,17 +49,21 @@ class AlarmService extends ChangeNotifier {
   }
 
   void start(BuildContext context) {
-    if (_timer != null) return;
-    _fetchReminders();
-    _timer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    if (_isStarted) return;
+    _isStarted = true;
+
+    _timer?.cancel();
+    _fetchReminders().then((_) => _checkAlarm(context));
+    _timer = Timer.periodic(const Duration(seconds: 10), (timer) {
       _checkAlarm(context);
-      notifyListeners(); // update UI setiap 30 detik
+      notifyListeners();
     });
   }
 
   void stop() {
     _timer?.cancel();
     _timer = null;
+    _isStarted = false;
     stopAlarm();
   }
 
@@ -81,48 +82,64 @@ class AlarmService extends ChangeNotifier {
       }
       _activeReminders = allReminders;
       _lastFetchTime = DateTime.now();
+      debugPrint('AlarmService fetched ${_activeReminders.length} active reminders');
     } catch (e) {
       debugPrint("Gagal fetch reminders untuk alarm: $e");
     }
   }
 
   void _checkAlarm(BuildContext context) {
+    if (_isPlaying) return;
+
     final now = DateTime.now();
 
-    // Refresh data setiap 5 menit
     if (_lastFetchTime == null || now.difference(_lastFetchTime!).inMinutes >= 5) {
       _fetchReminders();
     }
 
-    final currentDay = DateFormat('EEEE').format(now).toLowerCase();
-    final currentTime = DateFormat('HH:mm').format(now);
+    final currentDate = DateFormat('yyyy-MM-dd').format(now);
+    final currentDay = Helpers.todayKey();
+    final currentMinutes = now.hour * 60 + now.minute;
 
-    // Jangan bunyikan ulang di menit yang sama
-    if (_lastPlayedTimeKey == currentTime) return;
+    debugPrint('=== CHECK ALARM ${now.hour}:${now.minute} ===');
+    debugPrint('Hari: $currentDay | Menit sekarang: $currentMinutes');
+    debugPrint('Total active reminders: ${_activeReminders.length}');
+    for (var r in _activeReminders) {
+      final selisih = currentMinutes - r.scheduledMinutes;
+      debugPrint('  Reminder ${r.id}: days=${r.daysOfWeek}, scheduledMenit=${r.scheduledMinutes}, selisih=$selisih');
+      debugPrint('  → containsDay: ${r.daysOfWeek.contains(currentDay)}');
+    }
 
     for (var reminder in _activeReminders) {
-      if (reminder.daysOfWeek.contains(currentDay) && reminder.timeShort == currentTime) {
-        _lastPlayedTimeKey = currentTime;
+      final reminderKey = '$currentDate|${reminder.id}|${reminder.timeShort}';
+
+      if (_lastPlayedReminderKey == reminderKey) continue;
+
+      final minutesLate = currentMinutes - reminder.scheduledMinutes;
+      final shouldRingToday =
+          reminder.daysOfWeek.contains(currentDay) && minutesLate >= 0 && minutesLate <= 10;
+
+      if (shouldRingToday) {
+        _lastPlayedReminderKey = reminderKey;
+        debugPrint('Alarm fired for reminder ${reminder.id} at ${reminder.timeShort}');
         _playAlarmAndShowDialog(context, reminder);
         break;
       }
     }
   }
 
-  /// Tes alarm manual — bisa dipanggil dari UI
   Future<void> testAlarm(BuildContext context, {Reminder? reminder}) async {
     final testReminder = reminder ?? Reminder(
       id: 0,
       prescriptionId: 0,
       patientId: 0,
       scheduledTime: DateFormat('HH:mm').format(DateTime.now()),
-      daysOfWeek: [DateFormat('EEEE').format(DateTime.now()).toLowerCase()],
+      daysOfWeek: [Helpers.todayKey()],
       isActive: true,
       medicationName: 'Obat Tes',
       patientName: 'Pasien Tes',
       notes: 'Ini adalah tes alarm. Suara dan dialog alarm berfungsi!',
     );
-    // Reset playing state for test
     _isPlaying = false;
     await _playAlarmAndShowDialog(context, testReminder);
   }
@@ -132,12 +149,19 @@ class AlarmService extends ChangeNotifier {
     _isPlaying = true;
     notifyListeners();
 
+    // Kirim notifikasi ke status bar
+    await NotificationService.showAlarmNotification(
+      id: reminder.id,
+      title: 'Waktunya Minum Obat! 🔔',
+      body: '${reminder.patientName ?? "Pasien"} — ${reminder.medicationName ?? "Obat"} jam ${reminder.timeShort}',
+      payload: 'reminder|${reminder.id}|${reminder.patientName ?? ""}|${reminder.medicationName ?? ""}||${reminder.timeShort}',
+    );
+
     try {
       await _audioPlayer.setReleaseMode(ReleaseMode.loop);
       await _audioPlayer.play(AssetSource('sounds/alarm.wav'));
     } catch (e) {
       debugPrint("Gagal mainkan suara alarm: $e");
-      // Coba fallback ke beep system
       try {
         await _audioPlayer.play(AssetSource('sounds/beep.mp3'));
       } catch (_) {}
@@ -210,7 +234,6 @@ class _AlarmDialogState extends State<_AlarmDialog> with SingleTickerProviderSta
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Animated alarm icon
             ScaleTransition(
               scale: _scale,
               child: Container(

@@ -148,6 +148,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
           _formDays = List.from(_allDays);
           _formNotes = '';
         });
+        await AlarmService().refreshReminders();
         _selectPatient(_selectedPatient!);
       }
     } catch (e) {
@@ -217,6 +218,7 @@ class _RemindersScreenState extends State<RemindersScreen> {
       final updated = _reminders.firstWhere((r) => r.id == id, orElse: () => _reminders.first);
       if (isActive) {
         await _scheduleReminder(updated);
+        await AlarmService().refreshReminders();
       } else {
         await NotificationService.cancelReminderSchedules(
           reminderId: updated.id,

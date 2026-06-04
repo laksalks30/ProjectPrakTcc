@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'package:audioplayers/audioplayers.dart';
 import '../config/app_theme.dart';
 import '../services/notification_service.dart';
 
@@ -28,6 +29,7 @@ class _AlarmScreenState extends State<AlarmScreen> with SingleTickerProviderStat
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   Timer? _autoCloseTimer;
+  final AudioPlayer _audioPlayer = AudioPlayer();
 
   @override
   void initState() {
@@ -41,16 +43,26 @@ class _AlarmScreenState extends State<AlarmScreen> with SingleTickerProviderStat
     );
 
     HapticFeedback.heavyImpact();
+    _startAlarmSound();
 
     _autoCloseTimer = Timer(const Duration(minutes: 2), () {
       if (mounted) Navigator.of(context).pop();
     });
   }
 
+  Future<void> _startAlarmSound() async {
+    try {
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _audioPlayer.play(AssetSource('sounds/alarm.wav'));
+    } catch (_) {}
+  }
+
   @override
   void dispose() {
     _pulseController.dispose();
     _autoCloseTimer?.cancel();
+    _audioPlayer.stop();
+    _audioPlayer.dispose();
     super.dispose();
   }
 

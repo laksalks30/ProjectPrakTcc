@@ -9,6 +9,7 @@ import 'config/app_theme.dart';
 import 'providers/auth_provider.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
+import 'screens/alarm_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/home_screen.dart';
@@ -32,6 +33,30 @@ void main() async {
   // Inisialisasi Notifikasi (Hanya untuk Mobile)
   if (!kIsWeb) {
     await NotificationService.initialize();
+    NotificationService.onNotificationTapped = (payload) {
+      final parts = payload.split('|');
+      if (parts.length < 6 || parts.first != 'reminder') {
+        return;
+      }
+
+      final reminderId = int.tryParse(parts[1]) ?? 0;
+      final patientName = parts[2];
+      final medicationName = parts[3];
+      final dosage = parts[4];
+      final time = parts[5];
+
+      NotificationService.navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => AlarmScreen(
+            reminderId: reminderId,
+            patientName: patientName,
+            medicationName: medicationName,
+            dosage: dosage,
+            time: time,
+          ),
+        ),
+      );
+    };
   }
 
   // Status bar style
@@ -55,6 +80,7 @@ class ObatLansiaApp extends StatelessWidget {
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) {
           return MaterialApp(
+            navigatorKey: NotificationService.navigatorKey,
             title: 'ObatLansia',
             debugShowCheckedModeBanner: false,
             theme: AppTheme.lightTheme,
