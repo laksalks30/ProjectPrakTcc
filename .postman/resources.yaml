@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: e5fef8b6-e520-462a-89b3-99277c394089
+
+localResources:
+  collections:
+    - ..\ObatLansia_Postman_Collection.json

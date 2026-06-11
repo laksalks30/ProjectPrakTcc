@@ -1,0 +1,176 @@
+{
+	"info": {
+		"_postman_id": "c1f8a846-59b3-4f9e-a6a3-289b883bc2ab",
+		"name": "ObatLansia API",
+		"description": "Postman collection for ObatLansia Microservices",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth Service",
+			"item": [
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"admin@obatlansia.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{auth_url}}/login",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								"login"
+							]
+						}
+					}
+				},
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Test User\",\n    \"email\": \"test@obatlansia.com\",\n    \"password\": \"password123\",\n    \"role\": \"caregiver\"\n}"
+						},
+						"url": {
+							"raw": "{{auth_url}}/register",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								"register"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{auth_url}}/profile",
+							"host": [
+								"{{auth_url}}"
+							],
+							"path": [
+								"profile"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Medication Service",
+			"item": [
+				{
+					"name": "Get All Patients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{med_url}}/patients",
+							"host": [
+								"{{med_url}}"
+							],
+							"path": [
+								"patients"
+							]
+						}
+					}
+				},
+				{
+					"name": "Add Patient",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Opa Budi\",\n    \"date_of_birth\": \"1950-01-01\",\n    \"gender\": \"L\",\n    \"medical_history\": \"Hipertensi\",\n    \"notes\": \"Alergi paracetamol\"\n}"
+						},
+						"url": {
+							"raw": "{{med_url}}/patients",
+							"host": [
+								"{{med_url}}"
+							],
+							"path": [
+								"patients"
+							]
+						}
+					}
+				},
+				{
+					"name": "Get All Medications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}"
+							}
+						],
+						"url": {
+							"raw": "{{med_url}}/medications",
+							"host": [
+								"{{med_url}}"
+							],
+							"path": [
+								"medications"
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "auth_url",
+			"value": "http://localhost:8001/api/auth"
+		},
+		{
+			"key": "med_url",
+			"value": "http://localhost:8002/api"
+		},
+		{
+			"key": "token",
+			"value": "your_jwt_token_here"
+		}
+	]
+}
