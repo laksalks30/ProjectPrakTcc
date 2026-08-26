@@ -8,6 +8,7 @@ load_dotenv()
 
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME", "obat-lansia-bucket")
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "local-dev-project")
+LOCAL_BASE_URL = os.getenv("LOCAL_BASE_URL", f"http://localhost:{os.getenv('PORT', '8002')}")
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
@@ -50,7 +51,7 @@ async def upload_file_to_gcs(file_content: bytes, filename: str, content_type: s
             with open(local_filepath, "wb") as f:
                 f.write(file_content)
             
-            public_url = f"http://localhost:8002/static/uploads/{local_filename}"
+            public_url = f"{LOCAL_BASE_URL}/static/uploads/{local_filename}"
             print(f"✅ File saved successfully")
             print(f"🔗 Public URL: {public_url}")
             return public_url
@@ -84,7 +85,7 @@ async def delete_file_from_gcs(file_url: str) -> bool:
             return False
 
         # Handle local files
-        if "localhost:8002/static/uploads" in file_url:
+        if "/static/uploads/" in file_url:
             print(f"🗑️  Deleting local file: {file_url}")
             # Extract filename from URL
             local_filename = file_url.split("/static/uploads/")[-1]

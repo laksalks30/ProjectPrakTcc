@@ -1,5 +1,5 @@
 # ============ FILE: medication-service/app/routers/medications.py ============
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Form
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.services.db import get_db
@@ -66,11 +66,11 @@ async def get_medications(
 @router.put("/{medication_id}", summary="Update data obat + upload foto")
 async def update_medication(
     medication_id: int,
-    name: Optional[str] = None,
-    generic_name: Optional[str] = None,
-    category: Optional[str] = None,
-    description: Optional[str] = None,
-    unit: Optional[str] = None,
+    name: Optional[str] = Form(None),
+    generic_name: Optional[str] = Form(None),
+    category: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    unit: Optional[str] = Form(None),
     photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)

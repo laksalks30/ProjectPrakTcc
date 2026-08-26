@@ -6,6 +6,9 @@ frontend/node_modules/
 __pycache__/
 *.pyc
 
+# Python virtualenv
+medication-service/venv/
+
 # Local artifacts
 frontend/query
 

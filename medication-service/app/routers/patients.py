@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Form
 from sqlalchemy.orm import Session
 from typing import Optional
 from app.services.db import get_db
@@ -103,12 +103,12 @@ async def get_patient(
 @router.put("/{patient_id}", summary="Update data lansia + upload foto")
 async def update_patient(
     patient_id: int,
-    name: Optional[str] = None,
-    birth_date: Optional[str] = None,
-    gender: Optional[str] = None,
-    address: Optional[str] = None,
-    blood_type: Optional[str] = None,
-    medical_notes: Optional[str] = None,
+    name: Optional[str] = Form(None),
+    birth_date: Optional[str] = Form(None),
+    gender: Optional[str] = Form(None),
+    address: Optional[str] = Form(None),
+    blood_type: Optional[str] = Form(None),
+    medical_notes: Optional[str] = Form(None),
     photo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: dict = Depends(get_current_user)

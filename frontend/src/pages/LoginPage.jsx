@@ -1,6 +1,6 @@
 // ============ FILE: frontend/src/pages/LoginPage.jsx ============
 import React, { useState, useCallback } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Heart, Eye, EyeOff, Mail, Lock } from 'lucide-react'
 
@@ -12,7 +12,7 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
 
-  if (isAuthenticated) { navigate('/dashboard', { replace: true }); return null }
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   const validate = useCallback(() => {
     const errs = {}

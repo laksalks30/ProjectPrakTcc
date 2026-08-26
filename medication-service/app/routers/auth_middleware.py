@@ -22,7 +22,13 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
             status_code=401,
             detail={"success": False, "message": "Invalid token format. Use: Bearer <token>", "data": None, "meta": None}
         )
-    token = authorization.split(" ")[1]
+    parts = authorization.split(" ", 1)
+    token = parts[1].strip() if len(parts) == 2 else ""
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail={"success": False, "message": "Invalid token format. Use: Bearer <token>", "data": None, "meta": None}
+        )
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         return payload
