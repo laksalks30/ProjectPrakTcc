@@ -4,24 +4,47 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME || 'auth_db',
-  process.env.DB_USER || 'root',
-  process.env.DB_PASSWORD ?? null,
-  {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT, 10) || 3306,
-    dialect: 'mysql',
-    logging: process.env.NODE_ENV === 'development' ? console.log : false,
-    pool: {
-      max: 10,
-      min: 2,
-      acquire: 30000,
-      idle: 10000
-    },
-    timezone: '+07:00'
-  }
-);
+const sequelizeConfig = process.env.DATABASE_URL
+  ? {
+      dialect: 'postgres',
+      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      },
+      pool: {
+        max: 10,
+        min: 2,
+        acquire: 30000,
+        idle: 10000
+      }
+    }
+  : {
+      dialect: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT, 10) || 5432,
+      database: process.env.DB_NAME || 'auth_db',
+      username: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD ?? null,
+      logging: process.env.NODE_ENV === 'development' ? console.log : false,
+      pool: {
+        max: 10,
+        min: 2,
+        acquire: 30000,
+        idle: 10000
+      }
+    };
+
+const sequelize = process.env.DATABASE_URL
+  ? new Sequelize(process.env.DATABASE_URL, sequelizeConfig)
+  : new Sequelize(
+      sequelizeConfig.database,
+      sequelizeConfig.username,
+      sequelizeConfig.password,
+      sequelizeConfig
+    );
 
 const User = sequelize.define('User', {
   id: {
